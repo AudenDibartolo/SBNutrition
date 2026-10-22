@@ -13,9 +13,9 @@
     "test": "tsx --test lib/*.test.ts"
   },
   "dependencies": {
-    "@prisma/client": "^6.16.2",
-    "next": "^15.5.4",
-    "next-auth": "^4.24.11",
+    "@prisma/client": "^6.19.3",
+    "next": "^15.5.28",
+    "next-auth": "^4.24.15",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
@@ -25,7 +25,7 @@
     "@types/react-dom": "^19.3.0",
     "autoprefixer": "^10.6.1",
     "postcss": "^8.5.30",
-    "prisma": "^6.16.2",
+    "prisma": "^6.19.3",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2"

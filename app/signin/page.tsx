@@ -2,7 +2,7 @@ import SignInButtons from "@/components/SignInButtons";
 import { devLoginEnabled } from "@/lib/auth";
 
 const ERRORS: Record<string, string> = {
-  AccessDenied: "That account isn't allowed to sign in. Try your Stony Brook Google account.",
+  AccessDenied: "That Google account couldn't be used to sign in. Make sure its email address is verified.",
   OAuthSignin: "Couldn't start Google sign-in. Please try again.",
   OAuthCallback: "Google sign-in failed. Please try again.",
 };

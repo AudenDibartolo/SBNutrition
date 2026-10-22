@@ -52,14 +52,15 @@ Set `ALLOW_DEV_LOGIN="true"` in `.env` to sign in with just an email locally (di
    - `http://localhost:3000/api/auth/callback/google`
    - `https://YOUR-DOMAIN/api/auth/callback/google`
 4. Put the client ID and secret in `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
-5. Optional: set `ALLOWED_EMAIL_DOMAINS="stonybrook.edu"` to allow only university accounts.
+
+Anyone with a Google account can sign in. Signing in is only used to save each person's log to their own account.
 
 ## Deploying (Vercel + Postgres)
 
 1. Create a Postgres database (Vercel Postgres, Neon, Supabase…).
 2. In `prisma/schema.prisma` change `provider = "sqlite"` to `provider = "postgresql"`.
 3. In Vercel, set `DATABASE_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_ID`,
-   `GOOGLE_CLIENT_SECRET`, `CRON_SECRET` (and optionally `ALLOWED_EMAIL_DOMAINS`).
+   `GOOGLE_CLIENT_SECRET`, `CRON_SECRET`.
 4. Run `npx prisma db push` against the production database once, then deploy.
    Vercel Cron calls `/api/cron/sync` at 09:00 and 15:00 UTC with `Authorization: Bearer $CRON_SECRET`.
 

@@ -5,16 +5,6 @@ import { prisma } from "./db";
 
 export const devLoginEnabled = process.env.NODE_ENV !== "production" && process.env.ALLOW_DEV_LOGIN === "true";
 
-function emailAllowed(email: string): boolean {
-  const domains = (process.env.ALLOWED_EMAIL_DOMAINS ?? "")
-    .split(",")
-    .map((d) => d.trim().toLowerCase())
-    .filter(Boolean);
-  if (domains.length === 0) return true;
-  const domain = email.split("@")[1]?.toLowerCase() ?? "";
-  return domains.some((d) => domain === d || domain.endsWith("." + d));
-}
-
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 60 },
   pages: { signIn: "/signin", error: "/signin" },
@@ -39,12 +29,9 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async signIn({ user, account, profile }) {
-      const email = user.email?.toLowerCase();
-      if (!email) return false;
-      if (account?.provider === "google" && (profile as { email_verified?: boolean })?.email_verified === false) {
-        return false;
-      }
-      return emailAllowed(email);
+      // Anyone may sign in; we only need a verified email to key their data on.
+      if (!user.email) return false;
+      return !(account?.provider === "google" && (profile as { email_verified?: boolean })?.email_verified === false);
     },
     async jwt({ token, user }) {
       // `user` is only present on sign-in: create or update our user row then.
