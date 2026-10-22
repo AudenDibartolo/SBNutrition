@@ -18,7 +18,21 @@ model User {
   proteinGoal Int?
   carbGoal    Int?
   fatGoal     Int?
+  meals       Meal[]
   logs        FoodLog[]
+}
+
+/// A user-named group of foods on one day (e.g. "Lunch at West Side", "Post-gym").
+model Meal {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      String // YYYY-MM-DD in America/New_York
+  name      String
+  createdAt DateTime  @default(now())
+  logs      FoodLog[]
+
+  @@index([userId, date])
 }
 
 /// One logged food. Nutrition is snapshotted per single serving at log time,
@@ -27,8 +41,9 @@ model FoodLog {
   id                String   @id @default(cuid())
   userId            String
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  date              String // YYYY-MM-DD in America/New_York
-  meal              String // breakfast | lunch | dinner | snack
+  date              String // YYYY-MM-DD in America/New_York; always equals meal.date
+  mealId            String
+  meal              Meal     @relation(fields: [mealId], references: [id], onDelete: Cascade)
   servings          Float
   createdAt         DateTime @default(now())
   foodId            Int

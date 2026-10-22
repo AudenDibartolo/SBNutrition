@@ -14,7 +14,8 @@ allergens across days, weeks and months.
 - **Full nutrition**: every nutrient Nutrislice reports (calories, fat, saturated/trans fat, cholesterol,
   sodium, carbs, fiber, sugars, added sugars, protein, vitamins A/C/D, calcium, iron, potassium), with
   %DV, ingredients, diet tags and allergens.
-- **Daily log** split into breakfast/lunch/dinner/snacks, with editable servings and meal.
+- **Meals you name yourself**: create as many meals per day as you like ("Brunch after lab", "Late-night
+  snack"…), add foods to them from any menu, rename or delete them, and move foods between them.
 - **History**: 7/30/90-day views with a per-day chart (calories or any macro), daily averages for every
   nutrient, and a day-by-day table.
 - **Goals** for calories, protein, carbs and fat.

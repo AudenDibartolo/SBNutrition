@@ -1,14 +1,8 @@
-import type { FoodLog } from "@prisma/client";
+import type { FoodLog, Meal as MealRow } from "@prisma/client";
 import { scaleNutrition, sumNutrition, type Nutrition } from "./nutrients";
 
-export const MEALS = ["breakfast", "lunch", "dinner", "snack"] as const;
-export type Meal = (typeof MEALS)[number];
-
 export const MAX_SERVINGS = 20;
-
-export function isMeal(v: unknown): v is Meal {
-  return typeof v === "string" && (MEALS as readonly string[]).includes(v);
-}
+export const MAX_MEAL_NAME = 60;
 
 /** Servings must be > 0 and ≤ MAX_SERVINGS; stored rounded to 2 decimals. */
 export function parseServings(v: unknown): number | null {
@@ -17,10 +11,17 @@ export function parseServings(v: unknown): number | null {
   return Math.round(n * 100) / 100;
 }
 
+/** Trimmed meal name of 1–MAX_MEAL_NAME characters, or null if invalid. */
+export function parseMealName(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const name = v.trim().replace(/\s+/g, " ");
+  return name.length > 0 && name.length <= MAX_MEAL_NAME ? name : null;
+}
+
 export interface LogEntry {
   id: string;
   date: string;
-  meal: Meal;
+  mealId: string;
   servings: number;
   createdAt: string;
   foodId: number;
@@ -39,12 +40,20 @@ export interface LogEntry {
   icons: string[];
 }
 
+export interface MealWithEntries {
+  id: string;
+  name: string;
+  date: string;
+  entries: LogEntry[];
+  totals: Nutrition;
+}
+
 export function toEntry(row: FoodLog): LogEntry {
   const nutrition = JSON.parse(row.nutrition) as Nutrition;
   return {
     id: row.id,
     date: row.date,
-    meal: isMeal(row.meal) ? row.meal : "snack",
+    mealId: row.mealId,
     servings: row.servings,
     createdAt: row.createdAt.toISOString(),
     foodId: row.foodId,
@@ -60,6 +69,11 @@ export function toEntry(row: FoodLog): LogEntry {
     ingredients: row.ingredients,
     icons: JSON.parse(row.icons) as string[],
   };
+}
+
+export function toMeal(row: MealRow & { logs: FoodLog[] }): MealWithEntries {
+  const entries = row.logs.map(toEntry);
+  return { id: row.id, name: row.name, date: row.date, entries, totals: totalsOf(entries) };
 }
 
 export function totalsOf(entries: LogEntry[]): Nutrition {

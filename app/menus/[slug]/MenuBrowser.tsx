@@ -6,17 +6,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import DateNav from "@/components/DateNav";
 import ItemSheet, { servingLabel } from "@/components/ItemSheet";
 import Tags from "@/components/Tags";
-import { api, defaultMeal } from "@/lib/client";
+import { api } from "@/lib/client";
 import { addDays, campusToday } from "@/lib/dates";
 import { hoursFor } from "@/lib/hours";
 import { formatAmount } from "@/lib/nutrients";
 import type { MenuItem, MenuType } from "@/lib/nutrislice";
 import type { DayMenu } from "@/lib/menus";
-import type { Meal } from "@/lib/logs";
 
 type Selected = { item: MenuItem; menuType: MenuType };
 
-export default function MenuBrowser({ slug, initialDate, meal }: { slug: string; initialDate: string; meal: Meal | null }) {
+export default function MenuBrowser({ slug, initialDate, mealId: initialMealId }: { slug: string; initialDate: string; mealId: string | null }) {
   const router = useRouter();
   const [date, setDate] = useState(initialDate);
   const [menu, setMenu] = useState<DayMenu | null>(null);
@@ -26,6 +25,8 @@ export default function MenuBrowser({ slug, initialDate, meal }: { slug: string;
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Selected | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // The meal being built; updated after each add so the next item defaults to the same meal.
+  const [mealId, setMealId] = useState<string | null>(initialMealId);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,10 +50,11 @@ export default function MenuBrowser({ slug, initialDate, meal }: { slug: string;
   const changeDate = useCallback(
     (d: string) => {
       setDate(d);
-      const params = new URLSearchParams({ date: d, ...(meal ? { meal } : {}) });
-      router.replace(`/menus/${slug}?${params}`, { scroll: false });
+      // Meals belong to a single day, so changing the date drops the selected meal.
+      setMealId(null);
+      router.replace(`/menus/${slug}?date=${d}`, { scroll: false });
     },
-    [router, slug, meal],
+    [router, slug],
   );
 
   const q = query.trim().toLowerCase();
@@ -150,7 +152,10 @@ export default function MenuBrowser({ slug, initialDate, meal }: { slug: string;
                     <li key={`${item.foodId}-${ii}`}>
                       <button
                         className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-stone-50"
-                        onClick={() => setSelected({ item, menuType: m.menuType })}
+                        onClick={() => {
+                          setToast(null);
+                          setSelected({ item, menuType: m.menuType });
+                        }}
                       >
                         <div className="min-w-0 flex-1">
                           <div className="font-medium">{item.name}</div>
@@ -197,10 +202,11 @@ export default function MenuBrowser({ slug, initialDate, meal }: { slug: string;
           locationName={location.name}
           isDiningHall={location.isDiningHall}
           date={date}
-          initialMeal={meal ?? (date === campusToday() ? defaultMeal() : "lunch")}
+          initialMealId={mealId}
           onClose={() => setSelected(null)}
-          onAdded={(msg) => {
+          onAdded={(msg, addedTo) => {
             setSelected(null);
+            setMealId(addedTo);
             setToast(msg);
           }}
         />

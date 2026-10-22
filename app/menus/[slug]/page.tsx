@@ -1,6 +1,5 @@
 import MenuBrowser from "./MenuBrowser";
 import { campusToday, isValidDate } from "@/lib/dates";
-import { isMeal } from "@/lib/logs";
 
 export default async function LocationMenuPage({
   params,
@@ -15,7 +14,7 @@ export default async function LocationMenuPage({
     <MenuBrowser
       slug={slug}
       initialDate={isValidDate(sp.date) ? sp.date : campusToday()}
-      meal={isMeal(sp.meal) ? sp.meal : null}
+      mealId={sp.meal || null}
     />
   );
 }

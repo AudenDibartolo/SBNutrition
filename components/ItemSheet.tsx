@@ -2,7 +2,7 @@
 
 import { signIn, useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
-import { api, MEAL_LABELS } from "@/lib/client";
+import { api } from "@/lib/client";
 import { formatShortDate } from "@/lib/dates";
 import { scaleNutrition } from "@/lib/nutrients";
 import type { MenuItem, MenuType } from "@/lib/nutrislice";
@@ -10,7 +10,8 @@ import NutritionLabel from "./NutritionLabel";
 import ServingsInput, { formatServings } from "./ServingsInput";
 import Tags from "./Tags";
 
-type Meal = keyof typeof MEAL_LABELS;
+type MealOption = { id: string; name: string };
+const NEW = "new";
 
 export function servingLabel(amount: string | null, unit: string | null): string | null {
   if (!amount && !unit) return null;
@@ -24,7 +25,7 @@ export default function ItemSheet({
   locationName,
   isDiningHall,
   date,
-  initialMeal,
+  initialMealId,
   onClose,
   onAdded,
 }: {
@@ -34,13 +35,15 @@ export default function ItemSheet({
   locationName: string;
   isDiningHall: boolean;
   date: string;
-  initialMeal: Meal;
+  initialMealId: string | null;
   onClose: () => void;
-  onAdded: (message: string) => void;
+  onAdded: (message: string, mealId: string) => void;
 }) {
   const { status } = useSession();
   const [servings, setServings] = useState(1);
-  const [meal, setMeal] = useState<Meal>(initialMeal);
+  const [meals, setMeals] = useState<MealOption[] | null>(null);
+  const [choice, setChoice] = useState<string>(NEW);
+  const [newName, setNewName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,17 +53,43 @@ export default function ItemSheet({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    let cancelled = false;
+    api<{ meals: MealOption[] }>(`/api/meals?date=${date}`)
+      .then(({ meals }) => {
+        if (cancelled) return;
+        setMeals(meals);
+        // Default to the meal the user came from, else the one they made most recently.
+        const pick = meals.find((m) => m.id === initialMealId) ?? meals[meals.length - 1];
+        setChoice(pick ? pick.id : NEW);
+        setNewName(`Meal ${meals.length + 1}`);
+      })
+      .catch((e) => !cancelled && setError(e.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [status, date, initialMealId]);
+
+  const targetName = choice === NEW ? newName.trim() : meals?.find((m) => m.id === choice)?.name ?? "";
   const serving = servingLabel(item.servingSizeAmount, item.servingSizeUnit);
 
   async function add() {
     setSaving(true);
     setError(null);
     try {
-      await api("/api/logs", {
+      const { entry } = await api<{ entry: { mealId: string } }>("/api/logs", {
         method: "POST",
-        body: JSON.stringify({ schoolSlug, menuTypeId: menuType.id, foodId: item.foodId, date, meal, servings }),
+        body: JSON.stringify({
+          schoolSlug,
+          menuTypeId: menuType.id,
+          foodId: item.foodId,
+          date,
+          servings,
+          ...(choice === NEW ? { newMealName: newName } : { mealId: choice }),
+        }),
       });
-      onAdded(`Added ${formatServings(servings)} × ${item.name} to ${MEAL_LABELS[meal].toLowerCase()}`);
+      onAdded(`Added ${formatServings(servings)} × ${item.name} to ${targetName}`, entry.mealId);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -104,19 +133,43 @@ export default function ItemSheet({
               Self-serve buffet: count how many portions you took, e.g. two scoops of a 4 oz portion = 2 servings.
             </p>
           ) : null}
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <label className="text-sm" htmlFor="meal">
-              Meal
-            </label>
-            <select id="meal" className="input py-1.5" value={meal} onChange={(e) => setMeal(e.target.value as Meal)}>
-              {(Object.keys(MEAL_LABELS) as Meal[]).map((m) => (
-                <option key={m} value={m}>
-                  {MEAL_LABELS[m]}
-                </option>
-              ))}
-            </select>
-            <span className="text-sm text-stone-600">on {formatShortDate(date)}</span>
-          </div>
+          {status === "authenticated" ? (
+            <div className="mt-3">
+              <div className="mb-1.5 text-sm font-medium">
+                Add to meal <span className="font-normal text-stone-600">on {formatShortDate(date)}</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {(meals ?? []).map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setChoice(m.id)}
+                    className={`chip border px-3 py-1 text-sm ${choice === m.id ? "border-brand-500 bg-brand-50 text-brand-700" : "border-stone-300 bg-white text-stone-700"}`}
+                  >
+                    {m.name}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setChoice(NEW)}
+                  className={`chip border border-dashed px-3 py-1 text-sm ${choice === NEW ? "border-brand-500 bg-brand-50 text-brand-700" : "border-stone-400 bg-white text-stone-700"}`}
+                >
+                  + New meal
+                </button>
+              </div>
+              {choice === NEW ? (
+                <input
+                  className="input mt-2 w-full"
+                  maxLength={60}
+                  placeholder="Name it anything, e.g. Lunch with friends"
+                  value={newName}
+                  aria-label="New meal name"
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => setNewName(e.target.value)}
+                />
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="mt-4">
@@ -143,8 +196,8 @@ export default function ItemSheet({
 
         <div className="sticky bottom-0 -mx-5 -mb-5 mt-5 border-t border-stone-200 bg-white p-4">
           {status === "authenticated" ? (
-            <button className="btn-primary w-full py-3 text-base" disabled={saving} onClick={add}>
-              {saving ? "Adding…" : `Add to ${MEAL_LABELS[meal]}`}
+            <button className="btn-primary w-full py-3 text-base" disabled={saving || !meals || !targetName} onClick={add}>
+              {saving ? "Adding…" : targetName ? `Add to ${targetName}` : "Name your meal"}
             </button>
           ) : (
             <button className="btn-primary w-full py-3 text-base" onClick={() => signIn("google")}>

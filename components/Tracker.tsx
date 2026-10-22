@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { api, MEAL_LABELS } from "@/lib/client";
+import { api } from "@/lib/client";
 import { addDays, campusToday } from "@/lib/dates";
-import { MEALS, type LogEntry, type Meal } from "@/lib/logs";
+import type { LogEntry, MealWithEntries } from "@/lib/logs";
 import { formatAmount, scaleNutrition, type Nutrition } from "@/lib/nutrients";
 import DateNav from "./DateNav";
 import { servingLabel } from "./ItemSheet";
@@ -36,14 +36,16 @@ function Progress({ label, value, goal, unit }: { label: string; value: number; 
   );
 }
 
-function EntryRow({ entry, onChanged }: { entry: LogEntry; onChanged: () => void }) {
+type MealOption = { id: string; name: string };
+
+function EntryRow({ entry, meals, onChanged }: { entry: LogEntry; meals: MealOption[]; onChanged: () => void }) {
   const [open, setOpen] = useState(false);
   const [servings, setServings] = useState(entry.servings);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const serving = servingLabel(entry.servingSizeAmount, entry.servingSizeUnit);
 
-  async function save(patch: { servings?: number; meal?: Meal }) {
+  async function save(patch: { servings?: number; mealId?: string }) {
     setBusy(true);
     setError(null);
     try {
@@ -93,19 +95,21 @@ function EntryRow({ entry, onChanged }: { entry: LogEntry; onChanged: () => void
             <button className="btn-primary" disabled={busy || servings === entry.servings} onClick={() => save({ servings })}>
               Save
             </button>
-            <select
-              className="input py-2"
-              value={entry.meal}
-              disabled={busy}
-              aria-label="Move to meal"
-              onChange={(e) => save({ meal: e.target.value as Meal })}
-            >
-              {MEALS.map((m) => (
-                <option key={m} value={m}>
-                  {MEAL_LABELS[m]}
-                </option>
-              ))}
-            </select>
+            {meals.length > 1 ? (
+              <select
+                className="input py-2"
+                value={entry.mealId}
+                disabled={busy}
+                aria-label="Move to meal"
+                onChange={(e) => save({ mealId: e.target.value })}
+              >
+                {meals.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.id === entry.mealId ? `In ${m.name}` : `Move to ${m.name}`}
+                  </option>
+                ))}
+              </select>
+            ) : null}
             <button className="btn-ghost text-red-700" disabled={busy} onClick={remove}>
               Remove
             </button>
@@ -128,15 +132,154 @@ function EntryRow({ entry, onChanged }: { entry: LogEntry; onChanged: () => void
   );
 }
 
+function MealCard({
+  meal,
+  meals,
+  date,
+  onChanged,
+}: {
+  meal: MealWithEntries;
+  meals: MealOption[];
+  date: string;
+  onChanged: () => void;
+}) {
+  const [renaming, setRenaming] = useState(false);
+  const [name, setName] = useState(meal.name);
+  const [error, setError] = useState<string | null>(null);
+
+  async function rename(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      await api(`/api/meals/${meal.id}`, { method: "PATCH", body: JSON.stringify({ name }) });
+      setRenaming(false);
+      setError(null);
+      onChanged();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function remove() {
+    const what = meal.entries.length ? ` and the ${meal.entries.length} food${meal.entries.length === 1 ? "" : "s"} in it` : "";
+    if (!confirm(`Delete "${meal.name}"${what}?`)) return;
+    try {
+      await api(`/api/meals/${meal.id}`, { method: "DELETE" });
+      onChanged();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  return (
+    <section className="card overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 bg-stone-50 px-4 py-2">
+        {renaming ? (
+          <form onSubmit={rename} className="flex min-w-0 flex-1 gap-2">
+            <input
+              autoFocus
+              className="input min-w-0 flex-1 py-1.5"
+              maxLength={60}
+              value={name}
+              aria-label="Meal name"
+              onChange={(e) => setName(e.target.value)}
+            />
+            <button className="btn-primary py-1.5" type="submit" disabled={!name.trim()}>
+              Save
+            </button>
+            <button
+              className="btn-ghost py-1.5"
+              type="button"
+              onClick={() => {
+                setRenaming(false);
+                setName(meal.name);
+              }}
+            >
+              Cancel
+            </button>
+          </form>
+        ) : (
+          <>
+            <h2 className="min-w-0 font-semibold">
+              {meal.name}
+              {meal.entries.length ? (
+                <span className="ml-2 text-sm font-normal text-stone-500">{Math.round(meal.totals.calories ?? 0)} cal</span>
+              ) : null}
+            </h2>
+            <div className="flex items-center">
+              <button className="btn-ghost py-1 text-xs" onClick={() => setRenaming(true)}>
+                Rename
+              </button>
+              <button className="btn-ghost py-1 text-xs text-red-700" onClick={remove}>
+                Delete
+              </button>
+              <Link href={`/menus?date=${date}&meal=${meal.id}`} className="btn-ghost py-1 text-brand-600">
+                + Add food
+              </Link>
+            </div>
+          </>
+        )}
+      </div>
+      {error ? <p className="px-4 pt-2 text-sm text-red-700">{error}</p> : null}
+      {meal.entries.length ? (
+        <ul className="divide-y divide-stone-100">
+          {meal.entries.map((e) => (
+            <EntryRow key={`${e.id}-${e.servings}-${e.mealId}`} entry={e} meals={meals} onChanged={onChanged} />
+          ))}
+        </ul>
+      ) : (
+        <p className="px-4 py-3 text-sm text-stone-500">Nothing added yet.</p>
+      )}
+    </section>
+  );
+}
+
+function NewMealForm({ date, count, onCreated }: { date: string; count: number; onCreated: () => void }) {
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function create(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await api("/api/meals", { method: "POST", body: JSON.stringify({ date, name }) });
+      setName("");
+      onCreated();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={create} className="card flex flex-wrap items-center gap-2 border-dashed p-3">
+      <input
+        className="input min-w-0 flex-1"
+        maxLength={60}
+        placeholder={count ? "Name a new meal" : "Meal name, e.g. Lunch"}
+        value={name}
+        aria-label="New meal name"
+        onChange={(e) => setName(e.target.value)}
+      />
+      <button className="btn-primary" type="submit" disabled={busy || !name.trim()}>
+        + Create meal
+      </button>
+      {error ? <p className="w-full text-sm text-red-700">{error}</p> : null}
+    </form>
+  );
+}
+
 export default function Tracker({ initialDate }: { initialDate: string }) {
   const router = useRouter();
   const [date, setDate] = useState(initialDate);
-  const [data, setData] = useState<{ entries: LogEntry[]; totals: Nutrition } | null>(null);
+  const [data, setData] = useState<{ meals: MealWithEntries[]; totals: Nutrition } | null>(null);
   const [goals, setGoals] = useState<Goals | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    api<{ entries: LogEntry[]; totals: Nutrition }>(`/api/logs?date=${date}`)
+    api<{ meals: MealWithEntries[]; totals: Nutrition }>(`/api/logs?date=${date}`)
       .then((d) => {
         setData(d);
         setError(null);
@@ -159,7 +302,8 @@ export default function Tracker({ initialDate }: { initialDate: string }) {
   };
 
   const t = data?.totals ?? {};
-  const byMeal = (m: Meal) => data?.entries.filter((e) => e.meal === m) ?? [];
+  const meals = data?.meals ?? [];
+  const mealOptions = meals.map((m) => ({ id: m.id, name: m.name }));
 
   return (
     <div className="space-y-5">
@@ -199,37 +343,23 @@ export default function Tracker({ initialDate }: { initialDate: string }) {
 
       <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
         <div className="space-y-4">
-          {MEALS.map((m) => {
-            const entries = byMeal(m);
-            const kcal = entries.reduce((s, e) => s + (e.total.calories ?? 0), 0);
-            return (
-              <section key={m} className="card overflow-hidden">
-                <div className="flex items-center justify-between border-b border-stone-200 bg-stone-50 px-4 py-2">
-                  <h2 className="font-semibold">
-                    {MEAL_LABELS[m]}
-                    {entries.length ? <span className="ml-2 text-sm font-normal text-stone-500">{Math.round(kcal)} cal</span> : null}
-                  </h2>
-                  <Link href={`/menus?date=${date}&meal=${m}`} className="btn-ghost py-1 text-brand-600">
-                    + Add food
-                  </Link>
-                </div>
-                {entries.length ? (
-                  <ul className="divide-y divide-stone-100">
-                    {entries.map((e) => (
-                      <EntryRow key={`${e.id}-${e.servings}-${e.meal}`} entry={e} onChanged={load} />
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="px-4 py-3 text-sm text-stone-500">{data ? "Nothing logged." : "Loading…"}</p>
-                )}
-              </section>
-            );
-          })}
+          {!data ? <p className="card p-4 text-sm text-stone-500">Loading…</p> : null}
+          {data && meals.length === 0 ? (
+            <p className="text-sm text-stone-600">
+              No meals yet for this day. Create one below, call it whatever you like, then add food to it.
+            </p>
+          ) : null}
+          {meals.map((m) => (
+            <MealCard key={`${m.id}-${m.name}`} meal={m} meals={mealOptions} date={date} onChanged={load} />
+          ))}
+          {data ? <NewMealForm date={date} count={meals.length} onCreated={load} /> : null}
         </div>
-        <aside className="space-y-2">
-          <h2 className="font-semibold">Day totals</h2>
-          <NutritionLabel nutrition={t} />
-        </aside>
+        {meals.some((m) => m.entries.length) ? (
+          <aside className="space-y-2">
+            <h2 className="font-semibold">Day totals</h2>
+            <NutritionLabel nutrition={t} />
+          </aside>
+        ) : null}
       </div>
     </div>
   );

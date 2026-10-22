@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { addDays, campusToday, isValidDate, weekStart } from "./dates";
-import { parseServings } from "./logs";
+import { parseMealName, parseServings } from "./logs";
 import { isStale, STALE_MS } from "./menus";
 import { formatAmount, scaleNutrition, splitIcons, sumNutrition } from "./nutrients";
 import { parseDayItems, parseLocations } from "./nutrislice";
@@ -38,6 +38,13 @@ test("servings validation", () => {
   assert.equal(parseServings(-1), null);
   assert.equal(parseServings(21), null);
   assert.equal(parseServings("abc"), null);
+});
+
+test("meal name validation", () => {
+  assert.equal(parseMealName("  Post-gym   snack "), "Post-gym snack");
+  assert.equal(parseMealName("   "), null);
+  assert.equal(parseMealName("x".repeat(61)), null);
+  assert.equal(parseMealName(42), null);
 });
 
 test("icons split into allergens and tags", () => {
