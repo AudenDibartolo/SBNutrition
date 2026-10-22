@@ -1,0 +1,65 @@
+// For production, change provider to "postgresql" and point DATABASE_URL at Postgres.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  name        String?
+  image       String?
+  createdAt   DateTime  @default(now())
+  calorieGoal Int?
+  proteinGoal Int?
+  carbGoal    Int?
+  fatGoal     Int?
+  logs        FoodLog[]
+}
+
+/// One logged food. Nutrition is snapshotted per single serving at log time,
+/// so history stays correct after the menu rotates.
+model FoodLog {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date              String // YYYY-MM-DD in America/New_York
+  meal              String // breakfast | lunch | dinner | snack
+  servings          Float
+  createdAt         DateTime @default(now())
+  foodId            Int
+  name              String
+  schoolSlug        String
+  locationName      String
+  menuName          String
+  section           String?
+  servingSizeAmount String?
+  servingSizeUnit   String?
+  nutrition         String // JSON: Record<nutrientKey, number | null> for ONE serving
+  ingredients       String?
+  icons             String // JSON: string[] of diet/allergen labels
+
+  @@index([userId, date])
+}
+
+/// Cached copy of one menu type's items for one date, as parsed from Nutrislice.
+model MenuDay {
+  schoolId   Int
+  menuTypeId Int
+  date       String // YYYY-MM-DD
+  items      String // JSON: MenuSection[]
+  fetchedAt  DateTime
+
+  @@id([schoolId, menuTypeId, date])
+}
+
+/// Generic cache (e.g. the list of locations).
+model CacheEntry {
+  key       String   @id
+  value     String
+  fetchedAt DateTime
+}
